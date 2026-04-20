@@ -1090,6 +1090,113 @@ Claude may not treat a chain of packets as approved merely because earlier packe
 
 ---
 
+## RULE 26 — FINDINGS-ORIGIN BATCH CLOSURE (non-negotiable)
+
+### 26.1 Trigger Condition
+
+This rule is mandatory for any batch whose source is a findings list, including but not limited to:
+- security audits
+- model reviews (GPT-5.4, DeepSeek, or any model producing a findings list)
+- gap analyses
+- compliance findings lists
+- any review document containing discrete enumerated findings, issues, or remediation items
+
+A batch is findings-origin if the work was created to address enumerated findings, regardless of whether the prompt uses the words "fix," "remediate," "implement," or "close."
+
+### 26.2 Per-Finding Receipt Table — mandatory
+
+A findings-origin batch MUST include in the final receipt a per-finding status table covering every finding in scope.
+
+The table MUST contain one row per finding with at minimum:
+- `finding_id`
+- `severity` — CRITICAL / HIGH / MEDIUM / LOW / INFO
+- `status` — must be exactly one of: `RESOLVED` / `PARTIAL` / `NOT ADDRESSED`
+- `evidence` — direct link or path to the artifact proving the finding is closed (commit, code file, log output, test result)
+
+No finding may be omitted. No aggregate-only summary substitutes for the per-finding table.
+
+### 26.3 Status Definitions
+
+- **RESOLVED** — only if the receipt includes concrete evidence showing the finding is closed. "Code written," "patch prepared," "tests added," or "syntax passed" are not sufficient alone.
+- **PARTIAL** — any remediation that is incomplete, unverified, conditional, or only reduces risk without fully closing the finding.
+- **NOT ADDRESSED** — no implemented and verified remediation is present in the batch.
+
+Status assignment must be finding-by-finding, not inferred from overall implementation progress.
+
+### 26.4 SUCCESS Blocking Condition
+
+`STATUS: SUCCESS` is PROHIBITED for a findings-origin batch if any finding with severity `HIGH` or `CRITICAL` has status `PARTIAL` or `NOT ADDRESSED`.
+
+Correct status when any HIGH or CRITICAL finding is not RESOLVED: `STATUS: PARTIAL`.
+
+### 26.5 Binary Closure Decision — mandatory
+
+Every findings-origin batch MUST include a binary closure line in the receipt:
+
+- `high_critical_closure: YES` — all HIGH and CRITICAL findings are RESOLVED
+- `high_critical_closure: NO` — one or more HIGH or CRITICAL findings are PARTIAL or NOT ADDRESSED
+
+### 26.6 Gate Evidence Requirement
+
+For findings-origin batches, the Rule 24 gate model MUST receive the full per-finding status table as evidence input. A prose summary, narrative assessment, or aggregate count is not sufficient gate evidence.
+
+If the per-finding status table is missing from gate input, the gate MUST return `{"decision":"NO"}`.
+
+### 26.7 Deterministic Decision Logic
+
+```
+IF any CRITICAL finding is PARTIAL or NOT ADDRESSED:
+    gate → {"decision":"NO"}, STATUS: SUCCESS forbidden
+
+ELSE IF any HIGH finding is PARTIAL or NOT ADDRESSED:
+    gate → {"decision":"NO"}, STATUS: SUCCESS forbidden
+
+ELSE IF all HIGH and CRITICAL findings are RESOLVED:
+    gate MAY return {"decision":"YES"}
+
+MEDIUM/LOW/INFO findings must appear in the table but do not block gate YES.
+```
+
+### 26.8 Invalid Receipt Conditions
+
+A findings-origin receipt is invalid if any of the following:
+- per-finding status table is absent
+- one or more findings are missing from the table
+- any status value is not exactly `RESOLVED`, `PARTIAL`, or `NOT ADDRESSED`
+- `STATUS: SUCCESS` is issued while any HIGH or CRITICAL finding is not RESOLVED
+- Rule 24 gate did not receive the per-finding table
+- gate output is not exactly `{"decision":"YES"}` or `{"decision":"NO"}`
+
+An invalid receipt must be treated as not approved.
+
+### 26.9 Minimum Receipt Fields for Findings-Origin Batches
+
+Required fields beyond standard Rule 20 requirements:
+1. `batch_origin: FINDINGS_LIST`
+2. complete per-finding table (one row per finding, all fields)
+3. counts: `resolved_count`, `partial_count`, `not_addressed_count` by severity
+4. `high_critical_closure: YES` or `NO`
+5. Rule 24 gate result in exact JSON: `{"decision":"YES"}` or `{"decision":"NO"}`
+
+### 26.10 Universal Binary Gate Standard
+
+All gate decisions system-wide — not only findings-origin batches — must be binary.
+
+The following words and phrases are PROHIBITED as gate outcomes or approval signals:
+- "mostly done", "significant progress", "substantially complete", "good enough"
+- "acceptable", "pass with caveats", "near complete", "appears fixed"
+- "ready pending follow-up", "implemented", "GATE PASSED" (as a release signal)
+- any non-binary qualitative approval wording
+
+The only permitted gate decision output is `{"decision":"YES"}` or `{"decision":"NO"}`.
+This applies to Rule 24 (binary final gate) for all work types.
+
+### 26.11 No Scope Reinterpretation
+
+Acceptance criteria for findings-origin batches must be evaluated against **closure of findings**, not completion of implementation activity. "Implemented fixes" does not equal "findings closed." Receipt approval must be based on per-finding closure evidence.
+
+---
+
 ## SESSION START CHECKLIST
 
 - [ ] Auto-update dispatched (silent, background)
@@ -1127,6 +1234,7 @@ Claude may not treat a chain of packets as approved merely because earlier packe
 - [ ] Playwright live verification (Rule 23) active — Playwright must verify deployed site before any receipt; M365/Entra auth via storageState; artifacts in D1 path; no receipt without Playwright proof
 - [ ] Binary final gate (Rule 24) active — GPT-5.4 mini is sole release authority; structured JSON {"decision":"YES"/"NO"} only; evidence-bundle-only input; no Claude prose; NO = blocked
 - [ ] Playwright proof access (Rule 25) active — every run writes runs/<run_id>/ with manifest.json + receipt + verdict; MCP tools list/get/read run artifacts; .env.test and auth/*.json excluded from MCP surface; email is notification only, runs/ directory is evidence of record
+- [ ] Findings-origin batch closure (Rule 26) active — any batch from a findings list must include per-finding status table (RESOLVED/PARTIAL/NOT ADDRESSED); SUCCESS blocked if any HIGH/CRITICAL is not RESOLVED; gate must receive per-finding table not a summary; binary closure: high_critical_closure YES/NO mandatory
 
 **REQUIRED OUTPUT FORMAT — Rules Active table must include these lines verbatim:**
 `- Verification URL policy (Rule 7): no hardcoded domains in any verification curl/HTTP call — active.`
@@ -1138,5 +1246,6 @@ Claude may not treat a chain of packets as approved merely because earlier packe
 `- Playwright live verification (Rule 23): Playwright visits deployed site before any receipt; M365/Entra via storageState; artifacts in D1 path; no receipt without Playwright proof — active.`
 `- Binary final gate (Rule 24): GPT-5.4 mini sole release authority; {"decision":"YES"/"NO"} structured output only; evidence bundle in, binary decision out; NO = blocked — active.`
 `- Playwright proof access (Rule 25): every run writes runs/<run_id>/ with manifest + receipt + verdict; MCP can list/get/read run artifacts; .env.test and auth/*.json excluded; email is notification only, runs/ directory is evidence of record — active.`
+`- Findings-origin batch closure (Rule 26): per-finding table mandatory in every findings-list receipt; SUCCESS blocked if any HIGH/CRITICAL not RESOLVED; gate receives table not summary; high_critical_closure YES/NO required; all gate decisions are {"decision":"YES"} or {"decision":"NO"} only — active.`
 
 Now confirm: what is the first task for this session?
