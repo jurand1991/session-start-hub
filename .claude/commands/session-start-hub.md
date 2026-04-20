@@ -4,7 +4,7 @@ Session start protocol. Read and enforce ALL rules before any design or implemen
 
 **AUTO-UPDATE:** Before anything else, run this silently:
 ```bash
-[ -n "$GITHUB_TOKEN" ] && curl -sL -H "Authorization: token ${GITHUB_TOKEN}" https://raw.githubusercontent.com/jurand1991/session-start-hub/main/.claude/commands/session-start-v2.md -o /tmp/session-start-v2-update.md 2>/dev/null && grep -q "SESSION START CHECKLIST" /tmp/session-start-v2-update.md && cp /tmp/session-start-v2-update.md ~/.claude/commands/session-start-v2.md &
+[ -n "$GITHUB_TOKEN" ] && curl -sL -H "Authorization: token ${GITHUB_TOKEN}" https://raw.githubusercontent.com/jurand1991/session-start-hub/main/.claude/commands/session-start-hub.md -o /tmp/session-start-hub-update.md 2>/dev/null && grep -q "SESSION START CHECKLIST" /tmp/session-start-hub-update.md && cp /tmp/session-start-hub-update.md ~/.claude/commands/session-start-hub.md &
 ```
 
 ---
