@@ -1197,6 +1197,94 @@ Acceptance criteria for findings-origin batches must be evaluated against **clos
 
 ---
 
+## RULE 27 — MECHANICAL VERIFICATION LAYER (non-negotiable)
+
+All receipt pipelines must pass through the mechanical verification layer before DeepSeek review. This rule was implemented 2026-04-20 after model evaluators repeatedly issued RECEIPT_ISSUED based on prose descriptions of work rather than ground-truth artifact checks.
+
+### 27.1 Pipeline — enforced order
+
+```
+evidence_collector.sh → mechanical_verify.sh → deepseek_receipt.py (schema preflight → DeepSeek API → schema validate → write)
+```
+
+DeepSeek must not be called unless `mechanical_verify.sh` exits 0. Receipt must not be written unless schema validation passes.
+
+### 27.2 evidence_collector.sh v2.0
+
+Location: `~/virtual/supervisors/evidence_collector.sh`
+
+New interface (preferred):
+```bash
+bash evidence_collector.sh <task_id> [--artifact <path>]... [--cmd "cmd"]...
+```
+
+Legacy interface (still supported):
+```bash
+bash evidence_collector.sh <task_id> "cmd1" "cmd2" ...
+```
+
+For each `--artifact <path>`: computes SHA256, records size, mtime_utc, exists status in evidence JSON. `collector_version: "2.0"` field required.
+
+### 27.3 mechanical_verify.sh
+
+Location: `~/virtual/supervisors/mechanical_verify.sh`
+
+```bash
+bash mechanical_verify.sh <task_id>
+```
+
+Reads `evidence/<task_id>.evidence.json`. For each declared artifact:
+- Checks existence on disk
+- Recomputes SHA256 and compares to recorded value
+- Verifies mtime < 2 hours old
+
+Exit codes:
+- `0` — all checks passed — DeepSeek review may proceed
+- `2` — evidence file missing
+- `3` — malformed evidence JSON
+- `4` — artifact missing on disk
+- `5` — SHA256 hash mismatch (tamper detected)
+- `6` — stale artifact (mtime > 2h)
+- `7` — internal failure
+
+**Block rule:** If exit code is non-zero, `deepseek_receipt.py` must not call DeepSeek and must not write a receipt. Exit with code 4.
+
+### 27.4 receipt_schema.json
+
+Location: `~/virtual/supervisors/receipt_schema.json`
+
+All receipts must validate against this JSON Schema (draft-07) before being written. Required fields include: `task_id`, `issued_at` (ISO 8601 UTC), `issued_by: "deepseek"`, `overall_status`, `deepseek_verdict`, `commands[]`, `evidence_sha256` (64-char hex), `mechanical_verify_passed: true`.
+
+**Fail-closed rule:** If `jsonschema` is unavailable or schema file is missing, no receipt is written.
+
+### 27.5 deepseek_receipt.py — 6-stage pipeline
+
+Location: `~/virtual/supervisors/deepseek_receipt.py`
+
+Stages (enforced in order):
+1. `evidence_collect` — load and parse evidence JSON
+2. `mechanical_verify` — call `mechanical_verify.sh`; block if non-zero
+3. `schema_preflight` — validate evidence has required fields
+4. `deepseek_review` — call DeepSeek API
+5. `receipt_validate` — validate DeepSeek response against `receipt_schema.json`
+6. `receipt_write` — write receipt only if all above passed
+
+Audit log: every stage writes a JSON line to `~/virtual/supervisors/logs/verification_audit.log` with: `timestamp_utc`, `task_id`, `stage`, `status`, `reason`, `details`.
+
+API key: resolved from `~/.secrets/hubv2.env` (`DEEPSEEK_API_KEY`). The `agents/env.conf` key is stale.
+
+### 27.6 Gemini decision (explicit, not deferred)
+
+Gemini must NOT be added to the receipt evaluation pipeline until the mechanical verification layer has demonstrated stable operation across 30 or more batches with auditable logs and zero bypasses.
+
+Rationale: GPT-5.4 and DeepSeek independently agreed that adding a third LLM without mechanical ground truth reduces hallucination risk near-zero — it adds another model grading the same unverifiable evidence. Root fix is deterministic checks, not model count.
+
+### 27.7 Enforcement
+
+A receipt without `mechanical_verify_passed: true` must be treated as invalid. The `--check` command on `deepseek_receipt.py` returns `canonical_receipt: false` for any receipt missing this field.
+
+---
+
 ## SESSION START CHECKLIST
 
 - [ ] Auto-update dispatched (silent, background)
@@ -1235,6 +1323,7 @@ Acceptance criteria for findings-origin batches must be evaluated against **clos
 - [ ] Binary final gate (Rule 24) active — GPT-5.4 mini is sole release authority; structured JSON {"decision":"YES"/"NO"} only; evidence-bundle-only input; no Claude prose; NO = blocked
 - [ ] Playwright proof access (Rule 25) active — every run writes runs/<run_id>/ with manifest.json + receipt + verdict; MCP tools list/get/read run artifacts; .env.test and auth/*.json excluded from MCP surface; email is notification only, runs/ directory is evidence of record
 - [ ] Findings-origin batch closure (Rule 26) active — any batch from a findings list must include per-finding status table (RESOLVED/PARTIAL/NOT ADDRESSED); SUCCESS blocked if any HIGH/CRITICAL is not RESOLVED; gate must receive per-finding table not a summary; binary closure: high_critical_closure YES/NO mandatory
+- [ ] Mechanical verification layer (Rule 27) active — evidence_collector.sh v2.0 with --artifact SHA256 hashing; mechanical_verify.sh pre-gate (existence+hash+recency); receipt_schema.json jsonschema enforcement; deepseek_receipt.py 6-stage audited pipeline; DeepSeek blocked if mechanical_verify exits non-zero; Gemini not added until 30+ proven batches
 
 **REQUIRED OUTPUT FORMAT — Rules Active table must include these lines verbatim:**
 `- Verification URL policy (Rule 7): no hardcoded domains in any verification curl/HTTP call — active.`
@@ -1247,5 +1336,6 @@ Acceptance criteria for findings-origin batches must be evaluated against **clos
 `- Binary final gate (Rule 24): GPT-5.4 mini sole release authority; {"decision":"YES"/"NO"} structured output only; evidence bundle in, binary decision out; NO = blocked — active.`
 `- Playwright proof access (Rule 25): every run writes runs/<run_id>/ with manifest + receipt + verdict; MCP can list/get/read run artifacts; .env.test and auth/*.json excluded; email is notification only, runs/ directory is evidence of record — active.`
 `- Findings-origin batch closure (Rule 26): per-finding table mandatory in every findings-list receipt; SUCCESS blocked if any HIGH/CRITICAL not RESOLVED; gate receives table not summary; high_critical_closure YES/NO required; all gate decisions are {"decision":"YES"} or {"decision":"NO"} only — active.`
+`- Mechanical verification layer (Rule 27): evidence_collector.sh v2.0 with SHA256 artifact hashing; mechanical_verify.sh pre-gate blocks DeepSeek on non-zero exit; receipt_schema.json jsonschema enforced before receipt write; 6-stage audited pipeline; Gemini deferred until 30+ proven batches — active.`
 
 Now confirm: what is the first task for this session?
