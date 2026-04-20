@@ -941,6 +941,71 @@ print("FINAL GATE:", result["decision"])
 
 ---
 
+## RULE 25 — PLAYWRIGHT PROOF ACCESS RULE (non-negotiable)
+
+All completed Playwright E2E runs must write their final proof artifacts into a stable read-only verification location that is accessible through the Hub MCP truth plane.
+
+**Required per-run directory structure**
+
+```
+/home/otsadmin/playwright-e2e/runs/<run_id>/
+  manifest.json          — run metadata: run_id, timestamp, test suite, pass/fail counts, live URLs tested, portfolio item id/slug if relevant
+  junit.xml              — raw test output in JUnit format
+  screenshots/           — all screenshots captured during the run
+  console.log            — raw browser console output
+  evidence_bundle.json   — structured evidence: test results, URLs tested, screenshot paths, pass/fail per story
+  deepseek_receipt.json  — DeepSeek receipt issued for this run (RECEIPT_ISSUED status required)
+  gpt_verdict.json       — GPT-5.4 mini binary gate verdict: {"decision":"YES"} or {"decision":"NO"}
+```
+
+Rules:
+- The `runs/` directory must be created automatically at the end of every Playwright run — not manually.
+- `run_id` must be a timestamp-based unique identifier (e.g. `20260420_143512`).
+- `manifest.json` must include: `run_id`, `timestamp`, `projects_run`, `tests_passed`, `tests_failed`, `live_urls_tested`, `portfolio_item_slug` (if applicable), `receipt_path`, `verdict_path`.
+- All artifact paths inside `manifest.json` must be absolute paths.
+- A Playwright run without a corresponding `runs/<run_id>/` directory is not considered evidence for any receipt.
+
+**MCP accessibility requirements**
+
+The following MCP tool capabilities must be available on the Hub truth plane:
+
+- `list_verification_runs` — returns all run_ids in `playwright-e2e/runs/`, sorted newest first
+- `get_verification_run` — returns the full `manifest.json` for a given run_id
+- `get_verification_file` — returns the content of any file within a given run_id directory (by filename)
+- `get_latest_verification_run` — returns the manifest.json for the most recent run
+- `get_receipt_to_portfolio_links` — returns a list of `{run_id, deepseek_receipt_path, gpt_verdict_path, portfolio_item_slug}` for all runs that have a linked portfolio item
+
+**Security boundary — non-negotiable**
+
+Must NOT be exposed through MCP or readable verification surface:
+- `.env.test`
+- `auth/*.json` (session cookies, storageState files)
+- Any live session token or credential file
+
+Must be exposed (read-only):
+- `runs/<run_id>/manifest.json`
+- `runs/<run_id>/junit.xml`
+- `runs/<run_id>/screenshots/`
+- `runs/<run_id>/console.log`
+- `runs/<run_id>/evidence_bundle.json`
+- `runs/<run_id>/deepseek_receipt.json`
+- `runs/<run_id>/gpt_verdict.json`
+
+The MCP-readable path must be separate from the auth material path. Auth state files (`auth/hub-auth.json`, `auth/next-auth.json`) must remain outside the `runs/` tree entirely.
+
+**Receipt and proof dependency**
+
+A Playwright-gated feature must not be treated as fully proven unless:
+
+a. its `runs/<run_id>/` directory exists with all required files;
+b. `deepseek_receipt.json` contains `RECEIPT_ISSUED`;
+c. `gpt_verdict.json` contains `{"decision":"YES"}`;
+d. the run artifacts are accessible via the Hub MCP truth plane (or listed as fallback via D5 if MCP is unavailable).
+
+Email delivery of screenshots alone does not satisfy this rule. Email is a notification channel. The `runs/` directory is the evidence of record.
+
+---
+
 ## RULE 8 — ONE PACKET ONLY
 
 This session-start is a planning and control gate, not an autonomous batch runner.
@@ -1061,6 +1126,7 @@ Claude may not treat a chain of packets as approved merely because earlier packe
 - [ ] Playwright test standard (Rule 22) active — one spec per story in tests/e2e/<module>/; tests written alongside implementation; all tests must pass before receipt; no hardcoded domains; test coverage score below 7/10 blocks COMPLETE
 - [ ] Playwright live verification (Rule 23) active — Playwright must verify deployed site before any receipt; M365/Entra auth via storageState; artifacts in D1 path; no receipt without Playwright proof
 - [ ] Binary final gate (Rule 24) active — GPT-5.4 mini is sole release authority; structured JSON {"decision":"YES"/"NO"} only; evidence-bundle-only input; no Claude prose; NO = blocked
+- [ ] Playwright proof access (Rule 25) active — every run writes runs/<run_id>/ with manifest.json + receipt + verdict; MCP tools list/get/read run artifacts; .env.test and auth/*.json excluded from MCP surface; email is notification only, runs/ directory is evidence of record
 
 **REQUIRED OUTPUT FORMAT — Rules Active table must include these lines verbatim:**
 `- Verification URL policy (Rule 7): no hardcoded domains in any verification curl/HTTP call — active.`
@@ -1071,5 +1137,6 @@ Claude may not treat a chain of packets as approved merely because earlier packe
 `- Playwright test standard (Rule 22): one spec per story in tests/e2e/<module>/; tests alongside implementation; all tests pass before receipt; test coverage score <7/10 blocks COMPLETE — active.`
 `- Playwright live verification (Rule 23): Playwright visits deployed site before any receipt; M365/Entra via storageState; artifacts in D1 path; no receipt without Playwright proof — active.`
 `- Binary final gate (Rule 24): GPT-5.4 mini sole release authority; {"decision":"YES"/"NO"} structured output only; evidence bundle in, binary decision out; NO = blocked — active.`
+`- Playwright proof access (Rule 25): every run writes runs/<run_id>/ with manifest + receipt + verdict; MCP can list/get/read run artifacts; .env.test and auth/*.json excluded; email is notification only, runs/ directory is evidence of record — active.`
 
 Now confirm: what is the first task for this session?
