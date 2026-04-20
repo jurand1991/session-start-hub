@@ -857,6 +857,34 @@ Before any receipt may be drafted or issued, all changes touching **routes, page
 - If no suite exists, add the minimal compliant verification files required to satisfy this rule — no new API provider or auth system may be introduced.
 - The deployed target must be the real environment URL supplied by environment configuration, never hardcoded.
 
+**OTS deployed verification infrastructure (as of 2026-04-20)**
+
+Suite location: `/home/otsadmin/playwright-e2e/`
+
+Run command:
+```bash
+cd /home/otsadmin/playwright-e2e && npx playwright test --project=next --project=hub
+```
+
+Auth setup:
+- **NEXT** (`localhost:3000`): API-based — POST `/api/auth/login` with `PORTAL_PASSWORD` → `next-session` cookie → `auth/next-auth.json`
+- **Hub** (`hub.otsbroker.com`): M365 Entra OAuth browser automation → Flask `session` cookie → `auth/hub-auth.json`
+  - M365 test account: `playwright-test@otsbroker.com` (excluded from MFA CA policy + Registration Campaign; Email OTP pre-registered)
+  - Credentials stored in `.env.test` — gitignored, server-local only
+  - Setup handles: KMSI prompt, MFA registration nudge, `mysignins.microsoft.com` redirects (8-loop resilience)
+
+Active test suite (7 tests, all must pass):
+
+| Test ID | Project | What it verifies |
+|---|---|---|
+| US-smoke-001 | next | NEXT portal loads authenticated at `/imports`, no `/login` redirect |
+| US-smoke-001b | next | `/api/auth/status` returns 200 + JSON object |
+| US-hub-smoke-001 | hub | Hub dashboard loads, no `/auth/login` redirect |
+| US-hub-smoke-002 | hub | `/api/knowledge/stats` returns 200 (session cookie accepted) |
+| US-hub-smoke-003 | hub | Hub dashboard body content >100 chars |
+
+Proof artifacts written to `playwright-e2e/test-results/` per run.
+
 **Receipt dependency**
 No receipt may be drafted or issued until Rule 23 verification artifacts exist for all in-scope changed surfaces. Absence of Playwright artifacts = receipt blocked.
 
