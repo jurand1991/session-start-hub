@@ -1,6 +1,6 @@
 Session start protocol. Read and enforce ALL rules before any design or implementation begins.
 
-**EXECUTION RULE — NO TIMEOUTS:** All GPT-5.4 and DeepSeek API calls must use Bash tool with `timeout=600000` (10 minutes). Never use default 120s timeout — reasoning models need time.
+**EXECUTION RULE — NO TIMEOUTS:** All GPT-5.4, GPT-5.4 mini, and DeepSeek API calls must use Bash tool with `timeout=600000` (10 minutes). Never use default 120s timeout — reasoning models need time.
 
 **AUTO-UPDATE:** Before anything else, run this silently:
 ```bash
@@ -13,11 +13,14 @@ Session start protocol. Read and enforce ALL rules before any design or implemen
 
 | Model | Role | Authority |
 |---|---|---|
-| **GPT-5.4** | Design lead, architect, final evaluator | Designs features, makes hard decisions, issues implementation authorization, signs off on completion |
-| **DeepSeek** | Gate authority, receipt generator, secondary evaluator | Runs batch gate, issues receipts, co-evaluates completion |
+| **GPT-5.4 mini** | STANDARD lane spec drafter + binary final gate authority | Drafts design specs for STANDARD work; issues the only valid binary release decision (`{"decision":"YES"}` or `{"decision":"NO"}`) via structured output — sole release authority |
+| **GPT-5.4** | HIGH-RISK architect, UNKNOWN-work triage, tie-breaker, implementation authorization authority | Designs HIGH-RISK/UNKNOWN features, issues implementation authorization, adjudicates disputes, signs off on exceptional exceptions |
+| **DeepSeek** | Pre-gate + receipt drafter — NOT final release authority | Runs batch pre-gate (all lanes), drafts receipts; final release is governed exclusively by Rule 24 (GPT-5.4 mini) |
 | **Claude Sonnet** | Implementer only | Writes code, edits files, runs bash — NO design authority |
 | **Claude Haiku** | Bulk transformation only | CSS, boilerplate, searches, bulk reads, low-risk formatting |
 | **Claude Opus** | Security and architectural rescue (escalation only) | Security/auth review, architectural rescue — rare, logged |
+
+> **Clarification:** DeepSeek remains the sole receipt drafter/pre-gate authority. It is **not** the final release authority. Final release approval is governed exclusively by Rule 24 and must be issued by GPT-5.4 mini as a binary JSON decision.
 
 **Claude must not design. Claude must not self-evaluate. Claude must not rate its own output.**
 
@@ -149,8 +152,9 @@ A design must not pass the gate unless B3.1 through B3.6 are explicitly addresse
 
 ### C1 — Fixed Role Assignments (non-negotiable)
 
-a. GPT-5.4 is the design lead and holds exclusive implementation authorization authority.
-b. DeepSeek is the gate reviewer and receipt generator.
+a. GPT-5.4 is the HIGH-RISK and UNKNOWN-work design lead and holds exclusive implementation authorization authority.
+a2. GPT-5.4 mini is the STANDARD lane spec drafter and sole binary final gate authority (Rule 24). GPT-5.4 mini must not act as design lead for HIGH-RISK or UNKNOWN work.
+b. DeepSeek is the pre-gate reviewer and receipt drafter. DeepSeek is not the final release authority.
 c. Claude is implementer only — must not design, must not evaluate, must not self-certify.
 d. Haiku is permitted for bulk transformation, summarization, and low-risk formatting tasks only.
 e. Opus is used for security escalation and architectural rescue only.
@@ -159,12 +163,15 @@ e. Opus is used for security escalation and architectural rescue only.
 
 Within the fixed assignments above, work must be routed by required capability, not by vendor preference. The required capability must be stated in the session record for each model invocation. Allowed capability labels:
 
-- `design-synthesis` → GPT-5.4
-- `story-generation` → GPT-5.4
+- `design-synthesis` → GPT-5.4 (HIGH-RISK / UNKNOWN only)
+- `standard-design-synthesis` → GPT-5.4 mini (STANDARD lane only)
+- `story-generation` → GPT-5.4 (HIGH-RISK) or GPT-5.4 mini (STANDARD)
+- `binary-gate-decision` → GPT-5.4 mini (sole authority; Rule 24)
 - `implementation-drafting` → Claude Sonnet
 - `test-authoring` → Claude Sonnet
-- `gate-review` → DeepSeek
-- `receipt-generation` → DeepSeek
+- `gate-review` → DeepSeek (pre-gate)
+- `receipt-generation` → DeepSeek (receipt drafter)
+- `live-verification` → Playwright (Rule 23)
 - `bulk-transformation` → Haiku
 - `security-analysis` → Opus
 - `red-team-critique` → GPT-5.4 or DeepSeek (independent of primary designer)
@@ -317,11 +324,18 @@ print(r.choices[0].message.content)
 
 ---
 
-## RULE 2 — GPT-5.4 DESIGN SPEC (mandatory before implementation)
+## RULE 2 — DESIGN SPEC (tiered by lane — mandatory before implementation)
 
-Claude sends a design request to GPT-5.4 and waits for a spec. Claude must not begin coding until a spec is received and implementation is authorized.
+Claude must not begin coding until a design spec is received from the appropriate model and implementation is authorized.
 
-**Claude → GPT-5.4 design request must include:**
+**Lane tiering (mandatory)**
+- **STANDARD lane** → design spec issued by **GPT-5.4 mini**
+- **HIGH-RISK lane** → design spec issued by **GPT-5.4**
+- **UNKNOWN lane** → GPT-5.4 performs triage; if implementation proceeds, GPT-5.4 issues the design spec
+- GPT-5.4 mini must not issue specs for HIGH-RISK or UNKNOWN work
+- GPT-5.4 may always issue a spec; GPT-5.4 mini may issue specs for STANDARD work only
+
+**Claude → design request must include:**
 - Goal (what outcome, not what code)
 - Repo/stack context (files, tables, API patterns)
 - Constraints (must not break X, must work with Y)
@@ -330,7 +344,7 @@ Claude sends a design request to GPT-5.4 and waits for a spec. Claude must not b
 - Blocking questions
 - Contradiction artifacts (if any open)
 
-**GPT-5.4 design spec must include:**
+**Design spec must include:**
 - Final decision + rationale
 - Exact scope (files to change, files to leave alone)
 - Interface/contract definitions
@@ -342,6 +356,19 @@ Claude sends a design request to GPT-5.4 and waits for a spec. Claude must not b
 - Forbidden assumptions / non-goals
 - Escalation triggers (what would invalidate this spec)
 
+**STANDARD lane — call GPT-5.4 mini:**
+```python
+import openai, os
+client = openai.OpenAI(api_key=os.environ['OPENAI_API_KEY'])
+r = client.chat.completions.create(
+    model="gpt-5.4-mini",
+    messages=[{"role": "user", "content": design_request}],
+    max_completion_tokens=2000
+)
+print(r.choices[0].message.content)
+```
+
+**HIGH-RISK / UNKNOWN lane — call GPT-5.4:**
 ```python
 import openai, os
 client = openai.OpenAI(api_key=os.environ['OPENAI_API_KEY'])
@@ -353,7 +380,7 @@ r = client.chat.completions.create(
 print(r.choices[0].message.content)
 ```
 
-Claude implements the spec exactly. Deviations require escalation back to GPT-5.4.
+Claude implements the spec exactly. Deviations require escalation back to the spec-issuing model.
 
 ---
 
@@ -363,12 +390,18 @@ Claude implements the spec exactly. Deviations require escalation back to GPT-5.
 
 A finished design artifact is not permission to implement.
 
-**Exclusive implementation authorization:** Only GPT-5.4 may issue implementation authorization.
+**Exclusive implementation authorization:** Only GPT-5.4 may issue implementation authorization. (GPT-5.4 mini issues design specs for STANDARD work but implementation authorization always requires GPT-5.4.)
 
-**Required authorization text** — must appear verbatim in the session record before Claude writes any code:
+**Required authorization text** — must appear verbatim in the session record before Claude writes any code. Use the appropriate lane variant:
 
+For **STANDARD lane**:
 ```
-IMPLEMENTATION AUTHORIZED: scope version [X], handoff package version [Y], gate status [Pass or Conditional Pass resolved], approved exceptions [list or none].
+IMPLEMENTATION AUTHORIZED — GPT-5.4 mini spec present (STANDARD lane): scope version [X], handoff package version [Y], gate status [Pass or Conditional Pass resolved], approved exceptions [list or none].
+```
+
+For **HIGH-RISK or UNKNOWN lane**:
+```
+IMPLEMENTATION AUTHORIZED — GPT-5.4 spec present (HIGH-RISK / UNKNOWN lane): scope version [X], handoff package version [Y], gate status [Pass or Conditional Pass resolved], approved exceptions [list or none].
 ```
 
 **Block condition:** Claude must not begin implementation unless the authorization text above is present in the session record.
@@ -377,9 +410,9 @@ IMPLEMENTATION AUTHORIZED: scope version [X], handoff package version [Y], gate 
 
 ---
 
-## RULE 3 — RECEIPT PROTOCOL (DeepSeek is sole receipt authority — Claude must not write receipts)
+## RULE 3 — RECEIPT PROTOCOL (DeepSeek drafts receipts — Claude must not write receipts — GPT-5.4 mini controls final release via Rule 24)
 
-Claude is **banned from writing completion receipts**. DeepSeek is the only entity that can issue a receipt.
+Claude is **banned from writing completion receipts**. DeepSeek is the sole receipt drafter. GPT-5.4 mini is the sole final release authority (Rule 24). Receipts and release decisions are separate: DeepSeek drafts the receipt body; GPT-5.4 mini issues the binary YES/NO release decision.
 
 ### How it works
 
@@ -477,12 +510,13 @@ Overall < 6/10 → FAILED — re-implement from spec
 - 1–2 bounded design decisions
 - **Test requirement:** Playwright tests for every user story (happy path + at least 1 error path per story); all tests must pass before receipt
 
-**LOW-RISK** (DeepSeek specs → Claude/Haiku implements → DeepSeek eval):
+**LOW-RISK** (GPT-5.4 mini classifies → DeepSeek specs → Claude/Haiku implements → GPT-5.4 mini final gate):
 - ≤3 files, ≤150 LOC
 - No hard triggers
 - Fully specified, no architectural choices
 - Haiku for pure formatting/CSS/boilerplate
 - **Test requirement:** minimum 1 Playwright test per user story; test must pass before receipt
+- **LOW-RISK independence requirement:** GPT-5.4 mini must confirm the work is truly LOW-RISK before DeepSeek proceeds. This resolves the C5 conflict (DeepSeek may not be both sole spec author and sole evaluator). After GPT-5.4 mini confirms LOW-RISK, DeepSeek may spec and pre-gate. Final release decision is governed by Rule 24 (GPT-5.4 mini binary YES/NO).
 
 **UNKNOWN** → GPT-5.4 classifies first. NO coding until lane assigned.
 
@@ -494,7 +528,7 @@ If confidence is LOW → escalate lane upward.
 
 ```
 1. DeepSeek gate (all lanes except trivial) — must return GATE PASSED
-2. GPT-5.4 design spec (standard + high-risk) — must be received before step 3
+2. Design spec — STANDARD: GPT-5.4 mini; HIGH-RISK/UNKNOWN: GPT-5.4 — must be received before step 3
    [After-task overlay point A: confirm evidence status, contradiction artifacts, scope version]
 3. GPT-5.4 issues IMPLEMENTATION AUTHORIZED text — Claude must not start without it
 4. Claude implements spec exactly
@@ -541,11 +575,19 @@ b. Use http://localhost:{port} explicitly.
 
 Receipts produced by scripts that hardcode domain names are invalid and must be rejected.
 
-**How to call GPT-5.4:**
+**How to call GPT-5.4 (HIGH-RISK / UNKNOWN):**
 ```python
 import openai, os
 client = openai.OpenAI(api_key=os.environ['OPENAI_API_KEY'])
 r = client.chat.completions.create(model="gpt-5.4", messages=[{"role":"user","content":prompt}], max_completion_tokens=3000)
+print(r.choices[0].message.content)
+```
+
+**How to call GPT-5.4 mini (STANDARD lane design + binary gate):**
+```python
+import openai, os
+client = openai.OpenAI(api_key=os.environ['OPENAI_API_KEY'])
+r = client.chat.completions.create(model="gpt-5.4-mini", messages=[{"role":"user","content":prompt}], max_completion_tokens=2000)
 print(r.choices[0].message.content)
 ```
 
@@ -792,6 +834,85 @@ c. DeepSeek evaluation (Rule 4 — blind) scores the same dimension independentl
 
 ---
 
+## RULE 23 — PLAYWRIGHT LIVE VERIFICATION (mandatory before any receipt)
+
+Before any receipt may be drafted or issued, all changes touching **routes, pages, API endpoints, navigation, or operator workflows** must be verified with Playwright against the deployed application.
+
+**Mandatory steps**
+
+1. Open the deployed URL using an environment-provided value. The URL must never be hardcoded (see Rule 7).
+2. Authenticate if required. For Microsoft 365 / Entra OAuth, use Playwright `storageState` saved once and reused:
+   - `global-setup.ts` performs login once
+   - saved session state is written to `auth.json`
+   - all verification tests use `{ storageState: 'auth.json' }`
+3. Verify the changed route, page, component, endpoint flow, or operator workflow is present and functioning.
+4. Capture proof artifacts:
+   - screenshot (classified per Rule 18 — WORKSPACE / LIST / FORM)
+   - page title + current URL
+   - relevant visible DOM text or confirmation data
+5. Write all verification artifacts to the project-owned verification area using the D1 standard path.
+
+**Operational requirements**
+- Use the repository's existing Playwright suite if one exists.
+- If no suite exists, add the minimal compliant verification files required to satisfy this rule — no new API provider or auth system may be introduced.
+- The deployed target must be the real environment URL supplied by environment configuration, never hardcoded.
+
+**Receipt dependency**
+No receipt may be drafted or issued until Rule 23 verification artifacts exist for all in-scope changed surfaces. Absence of Playwright artifacts = receipt blocked.
+
+---
+
+## RULE 24 — BINARY FINAL GATE (GPT-5.4 mini — sole release authority)
+
+GPT-5.4 mini is the **only** model permitted to issue the final release decision.
+
+**Decision format**
+The final release decision must be structured JSON output with exactly one of:
+```json
+{"decision":"YES"}
+```
+or
+```json
+{"decision":"NO"}
+```
+No other values are permitted. No prose decisions. No "GATE PASSED" text. Structured output schema must be enforced.
+
+**Evidence-only input rule**
+GPT-5.4 mini must evaluate **only** the evidence bundle. The evidence bundle may contain:
+- Playwright verification artifacts (Rule 23)
+- test logs
+- build output
+- curl responses
+- database diffs
+
+GPT-5.4 mini must **not** receive Claude's prose explanation of what was done. Evidence in, binary decision out.
+
+**Release rule**
+Advancement is blocked unless `decision === "YES"`. `"NO"` requires Claude to fix and resubmit.
+
+**Implementation pattern (mandatory)**
+```python
+import openai, os, json
+client = openai.OpenAI(api_key=os.environ['OPENAI_API_KEY'])
+r = client.chat.completions.create(
+    model="gpt-5.4-mini",
+    messages=[{"role":"user","content": f"Evidence bundle:\n{evidence_bundle}\n\nDoes this evidence prove the acceptance criteria are fully met?"}],
+    response_format={"type":"json_schema","json_schema":{"name":"gate","strict":True,"schema":{"type":"object","properties":{"decision":{"type":"string","enum":["YES","NO"]}},"required":["decision"],"additionalProperties":False}}},
+    max_completion_tokens=100
+)
+result = json.loads(r.choices[0].message.content)
+assert result["decision"] in ("YES","NO")
+print("FINAL GATE:", result["decision"])
+```
+
+**Authority boundaries**
+- DeepSeek may draft the receipt where existing rules require it — DeepSeek is not release authority.
+- Claude may explain, summarize, and implement — Claude is not release authority.
+- GPT-5.4 mini alone issues the binary release decision.
+- GPT-5.4 may override the gate only if it withdraws authorization (Rule 2B withdrawal condition).
+
+---
+
 ## RULE 8 — ONE PACKET ONLY
 
 This session-start is a planning and control gate, not an autonomous batch runner.
@@ -880,6 +1001,7 @@ Claude may not treat a chain of packets as approved merely because earlier packe
 
 - [ ] Auto-update dispatched (silent, background)
 - [ ] `OPENAI_API_KEY` verified — GPT-5.4 test call returned response
+- [ ] `OPENAI_API_KEY` verified — GPT-5.4 mini test call returned response (STANDARD lane spec + binary gate)
 - [ ] `DEEPSEEK_API_KEY` verified — DeepSeek test call returned response
 - [ ] Role boundaries confirmed: Claude = implementer only, no design, no receipts, no self-scoring
 - [ ] Evidence standards (Section A) loaded — proof labels: Verified / Probable / Assumed / Blocked
@@ -909,6 +1031,8 @@ Claude may not treat a chain of packets as approved merely because earlier packe
 - [ ] Receipt requirements (Rule 20) active — all 15 required fields including user_stories, playwright_tests_written, playwright_tests_passed, stories_coverage; scope/protected-zone/spill fields mandatory
 - [ ] User story standard (Rule 21) active — Given/When/Then format; coverage: happy path + error path + edge case + access control; GPT-5.4 is sole story authority; no code without stories
 - [ ] Playwright test standard (Rule 22) active — one spec per story in tests/e2e/<module>/; tests written alongside implementation; all tests must pass before receipt; no hardcoded domains; test coverage score below 7/10 blocks COMPLETE
+- [ ] Playwright live verification (Rule 23) active — Playwright must verify deployed site before any receipt; M365/Entra auth via storageState; artifacts in D1 path; no receipt without Playwright proof
+- [ ] Binary final gate (Rule 24) active — GPT-5.4 mini is sole release authority; structured JSON {"decision":"YES"/"NO"} only; evidence-bundle-only input; no Claude prose; NO = blocked
 
 **REQUIRED OUTPUT FORMAT — Rules Active table must include these lines verbatim:**
 `- Verification URL policy (Rule 7): no hardcoded domains in any verification curl/HTTP call — active.`
@@ -917,5 +1041,7 @@ Claude may not treat a chain of packets as approved merely because earlier packe
 `- Project isolation (Rule 10): cross-project references are a hard failure — active.`
 `- User story standard (Rule 21): GPT-5.4 authors stories in Given/When/Then; no code without stories; happy path + error path + edge case + access control required — active.`
 `- Playwright test standard (Rule 22): one spec per story in tests/e2e/<module>/; tests alongside implementation; all tests pass before receipt; test coverage score <7/10 blocks COMPLETE — active.`
+`- Playwright live verification (Rule 23): Playwright visits deployed site before any receipt; M365/Entra via storageState; artifacts in D1 path; no receipt without Playwright proof — active.`
+`- Binary final gate (Rule 24): GPT-5.4 mini sole release authority; {"decision":"YES"/"NO"} structured output only; evidence bundle in, binary decision out; NO = blocked — active.`
 
 Now confirm: what is the first task for this session?
