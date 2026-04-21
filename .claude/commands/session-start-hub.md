@@ -1285,6 +1285,45 @@ A receipt without `mechanical_verify_passed: true` must be treated as invalid. T
 
 ---
 
+## RULE 28 — SCOPE MANIFEST (non-negotiable)
+
+Before writing any code, Claude must declare a complete scope manifest: every file to be created or modified, every route/endpoint/page to be added. The manifest is fixed before implementation begins.
+
+**Rules:**
+- **No silent additions.** Any file created or feature added that is not in the scope manifest is cross-segment spill (D4) and must be reported immediately — either added to scope with acceptance criteria, or reverted. It may not be silently shipped.
+- **Bonus features are banned.** "While I'm here" additions without explicit acceptance criteria are a governance violation, not a convenience.
+- **Pause and declare.** If Claude decides mid-implementation to add something not in scope, it must stop, declare the addition, state proposed acceptance criteria, and wait for confirmation before continuing.
+
+Why this rule exists: On 2026-04-21, Claude created `/admin/` index as an unscoped addition while building `/admin/ocr`. It listed 2 of 9 admin sections. No gate had acceptance criteria for the index completeness, so nothing caught it. The page shipped wrong by 7 sections.
+
+---
+
+## RULE 29 — GATE COMPLETENESS (non-negotiable)
+
+Gate acceptance criteria must cover 100% of the scope manifest — not just the primary objective.
+
+**Rules:**
+- **One criterion per built item.** If Claude built 3 things, the gate must have an explicit acceptance criterion for each. A gate that evaluates 1 out of 3 built items is incomplete and must return `{"decision":"NO"}` for the uncovered items.
+- **Manifest vs. diff check required.** Gate input must include: (a) the scope manifest, (b) actual list of files changed and features added, (c) any delta between them. Gate must return `{"decision":"NO"}` if any item in the actual diff has no acceptance criterion.
+- **"It's minor" is not an exception.** An unscoped addition with no acceptance criterion blocks the gate regardless of size.
+
+Why this rule exists: On 2026-04-21, the nginx routing gate passed correctly — it evaluated exactly what it was asked. But the admin index incompleteness was never in any gate's scope, so the gate had nothing to reject. Incomplete work passed every gate unchallenged.
+
+---
+
+## RULE 30 — INVENTORY COMPLETENESS (non-negotiable)
+
+Any page, list, index, or dashboard that enumerates system entities (routes, admin sections, services, modules, users, etc.) must be verified against live system state before the gate is run.
+
+**Rules:**
+- **No static hard-coded lists without a completeness check.** A hard-coded list is only acceptable if it is declared as a curated subset with documented exclusions.
+- **Count must match.** Gate evidence for any listing page must include: count of items in the rendered list vs. count found by code/config inspection. A mismatch is a gate-blocking failure.
+- **Discovery is required.** Before building an index or listing page, Claude must search the codebase to find all items that belong on it. Building from memory or partial knowledge is prohibited.
+
+Why this rule exists: On 2026-04-21, an admin index was built listing 2 sections when the actual system had 9 admin sections across 5 services. No gate criterion checked completeness. The page was wrong by 7 sections and passed every gate unchallenged.
+
+---
+
 ## SESSION START CHECKLIST
 
 - [ ] Auto-update dispatched (silent, background)
@@ -1323,7 +1362,10 @@ A receipt without `mechanical_verify_passed: true` must be treated as invalid. T
 - [ ] Binary final gate (Rule 24) active — GPT-5.4 mini is sole release authority; structured JSON {"decision":"YES"/"NO"} only; evidence-bundle-only input; no Claude prose; NO = blocked
 - [ ] Playwright proof access (Rule 25) active — every run writes runs/<run_id>/ with manifest.json + receipt + verdict; MCP tools list/get/read run artifacts; .env.test and auth/*.json excluded from MCP surface; email is notification only, runs/ directory is evidence of record
 - [ ] Findings-origin batch closure (Rule 26) active — any batch from a findings list must include per-finding status table (RESOLVED/PARTIAL/NOT ADDRESSED); SUCCESS blocked if any HIGH/CRITICAL is not RESOLVED; gate must receive per-finding table not a summary; binary closure: high_critical_closure YES/NO mandatory
-- [ ] Mechanical verification layer (Rule 27) active — evidence_collector.sh v2.0 with --artifact SHA256 hashing; mechanical_verify.sh pre-gate (existence+hash+recency); receipt_schema.json jsonschema enforcement; deepseek_receipt.py 6-stage audited pipeline; DeepSeek blocked if mechanical_verify exits non-zero; Gemini not added until 30+ proven batches
+- [ ] Mechanical verification layer (Rule 27) active — evidence_collector.sh v2.0 with --artifact SHA256 hashing; mechanical_verify.sh pre-gate (existence+hash+recency); receipt_schema.json jsonschema enforcement; deepseek_receipt.py 6-stage audited pipeline; DeepSeek blocked if mechanical_verify exits non-zero; Gemini deferred until 30+ proven batches
+- [ ] Scope manifest (Rule 28) active — full file+feature manifest declared before any code written; unscoped additions are spill and must be declared or reverted; no silent bonus features
+- [ ] Gate completeness (Rule 29) active — acceptance criteria must cover 100% of scope manifest; gate returns NO if any built item has no criterion; manifest vs. diff check required
+- [ ] Inventory completeness (Rule 30) active — any listing/index page must be verified against live system state; count in list must match count in code; discovery required before building
 
 **REQUIRED OUTPUT FORMAT — Rules Active table must include these lines verbatim:**
 `- Verification URL policy (Rule 7): no hardcoded domains in any verification curl/HTTP call — active.`
@@ -1337,5 +1379,8 @@ A receipt without `mechanical_verify_passed: true` must be treated as invalid. T
 `- Playwright proof access (Rule 25): every run writes runs/<run_id>/ with manifest + receipt + verdict; MCP can list/get/read run artifacts; .env.test and auth/*.json excluded; email is notification only, runs/ directory is evidence of record — active.`
 `- Findings-origin batch closure (Rule 26): per-finding table mandatory in every findings-list receipt; SUCCESS blocked if any HIGH/CRITICAL not RESOLVED; gate receives table not summary; high_critical_closure YES/NO required; all gate decisions are {"decision":"YES"} or {"decision":"NO"} only — active.`
 `- Mechanical verification layer (Rule 27): evidence_collector.sh v2.0 with SHA256 artifact hashing; mechanical_verify.sh pre-gate blocks DeepSeek on non-zero exit; receipt_schema.json jsonschema enforced before receipt write; 6-stage audited pipeline; Gemini deferred until 30+ proven batches — active.`
+`- Scope manifest (Rule 28): full file+feature manifest declared before any code; unscoped additions are spill — declare with AC or revert; no silent bonus features — active.`
+`- Gate completeness (Rule 29): acceptance criteria cover 100% of scope manifest; gate returns NO if any built item has no criterion; manifest vs. diff check required — active.`
+`- Inventory completeness (Rule 30): any listing/index page verified against live system state before gate; count in list must match count in code; discovery required before building — active.`
 
 Now confirm: what is the first task for this session?
