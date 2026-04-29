@@ -32,7 +32,7 @@ Incremental path (minor changes only): G2 → G4 → G5 → G6
 | Implementer | Claude Sonnet | Write code, deploy, provide evidence | Approve, validate, close gates |
 | Gate Executor | GPT-4o-mini | Run all binary YES/NO gates | Propose, implement |
 | Virtual JP | Gemini 2.5 Flash | Block if work contradicts project goals | Implement, propose |
-| Virtual Michal | Gemini 2.5 Flash | Block if quality, tests, or security fail | Propose, gate direction |
+| Virtual Michal | DeepSeek Reasoner | Block if quality, tests, or security fail | Propose, gate direction |
 
 Hard rule: The model that produces an artifact cannot be the model that gates it.
 
