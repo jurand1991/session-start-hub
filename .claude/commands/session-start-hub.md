@@ -1,404 +1,281 @@
-# hub-binary-gate-protocol-v1.md
-# System: hub.otsbroker.com | Binary-Gate Self-Governing AI Development Protocol
-# Version: 2.0 | Built: 2026-04-24 | Supersedes: session-start-hub.md (FAILED — scored 1-18/100 by GPT-5.4, DeepSeek, Opus)
-# Designed by: GPT-5.4 + DeepSeek Reasoner + Opus 4 in parallel cross-analysis
+# hub-binary-gate-protocol-v2.md
+# System: hub.otsbroker.com | Enforced AI Development Protocol
+# Built: 2026-04-29 | Replaces: session-start-hub.md (v1)
 # Authority: This file governs ALL AI development sessions on Hub. It cannot be bypassed.
 
 ---
 
-## RULE ZERO — the reason this file exists
+## RULE ZERO
 
-The previous protocol failed for 6 weeks because AI produced files while hub.otsbroker.com remained unchanged.
-AI output ≠ deployed reality. This protocol makes that gap impossible to ignore.
-
-**Every session ends in exactly one state: DEPLOYED or BLOCKED.**
+Every session ends in exactly one state: DEPLOYED or BLOCKED.
 There is no PARTIAL. There is no COMPLETE without a browser-verifiable change on hub.otsbroker.com.
 
 ---
 
-## GATE SEQUENCE (strict linear — no skip, no parallel, no shortcut)
+## GATE SEQUENCE
 
-```
-G0 SCOPE_LOCK → G1 PRE_STATE → G2 PLAN_APPROVE → G3 CODE_REVIEW → G4 DEPLOY_VERIFY → G5 DIFF_CONFIRM → G6 SESSION_SEAL
-```
+G0 SCOPE_LOCK → G1 DESIGN_ALIGNMENT → G2 RISK_ANALYSIS → G3 IMPLEMENTATION → G4 CODE_QUALITY → G5 DEPLOY_VERIFY → G6 SESSION_SEAL
 
-Every gate returns exactly: **YES** or **NO**
-**NO at any gate = session stops immediately. Rollback executes. Human is emailed. BLOCKED receipt is written.**
+Every gate returns exactly: YES or NO
+NO at any gate = session stops immediately. Rollback executes. Human is emailed. BLOCKED receipt is written.
+
+Incremental path (minor changes only): G2 → G4 → G5 → G6
 
 ---
 
-## ROLE LOCK (immutable for all sessions)
+## ROLE MAP
 
 | Role | Model | Allowed | Forbidden |
 |---|---|---|---|
-| Designer | GPT-5.4 | Propose scope, answer challenges | Gate own proposals, write code |
-| Challenger | DeepSeek Reasoner | Challenge proposals, gate G0/G2/G3 | Propose features, implement |
-| Architecture | Opus 4 | Architecture review (if invoked) | Gate implementation |
-| Implementer | Claude / Sonnet | Write code, deploy, provide evidence | Approve, validate, or close gates |
-| Gate Executor | GPT-5.4-mini | Run all binary gates, write receipts | Propose, implement |
-| Reality Check | Gemini / curl | Capture live browser state G1 + G5 | Implement, propose, gate |
+| Designer | GPT-5.4 | Propose scope | Gate own proposals, write code |
+| Challenger | DeepSeek Reasoner | Challenge proposals, adversarial review | Propose features |
+| Implementer | Claude Sonnet | Write code, deploy, provide evidence | Approve, validate, close gates |
+| Gate Executor | GPT-4o-mini | Run all binary YES/NO gates | Propose, implement |
+| Virtual JP | Gemini 2.5 Flash | Block if work contradicts project goals | Implement, propose |
+| Virtual Michal | Gemini 2.5 Flash | Block if quality, tests, or security fail | Propose, gate direction |
 
-**Hard rule:** The model that produces an artifact cannot be the model that gates that artifact.
-If producer == gater: the protocol is broken. Fix it before proceeding.
+Hard rule: The model that produces an artifact cannot be the model that gates it.
 
----
-
-## EXECUTION RULE — NO TIMEOUTS
-
-All GPT-5.4, DeepSeek Reasoner, and Opus API calls: use Bash tool with `timeout=600000` (10 minutes).
-Never default 120s — reasoning models need time.
+Virtual JP gates: G0, G1, G6 (direction and outcome)
+Virtual Michal gates: G2, G3, G4, G5 (implementation quality at every step)
 
 ---
 
-## AUTO-UPDATE (runs silently at session start)
+## PRE-FLIGHT (runs before G0 — session blocked if any fail)
 
 ```bash
-[ -n "$GITHUB_TOKEN" ] && curl -sL -H "Authorization: token ${GITHUB_TOKEN}" \
-  https://raw.githubusercontent.com/jurand1991/session-start-hub/main/.claude/commands/session-start-hub.md \
-  -o /tmp/session-start-hub-update.md 2>/dev/null \
-  && grep -q "SESSION READY" /tmp/session-start-hub-update.md \
-  && cp /tmp/session-start-hub-update.md ~/.claude/commands/session-start-hub.md &
-```
-
----
-
-## MANDATORY PRE-FLIGHT (runs before G0 — blocks session if any fail)
-
-```bash
-# 1. Load secrets
-export $(grep -v '^#' ~/.secrets/hubv2.env | xargs)
-
-# 2. Git status — HARD STOP if project untracked
 cd /home/otsadmin
-git status --short
-git log --oneline -5
-# STOP if uncommitted changes from prior session exist without explanation
-
-# 3. Yesterday visibility check — answer in 1 sentence each
-# Q: What was built last session?
-# Q: Where is it visible in the UI right now?
-# Q: If not visible: why was it prioritised over visible work?
-
-# 4. API health checks
-python3 -c "
-import openai, os, requests
-client = openai.OpenAI(api_key=os.environ['OPENAI_API_KEY'])
-r = client.chat.completions.create(model='gpt-5.4-mini', messages=[{'role':'user','content':'ping'}], max_completion_tokens=5)
-print('GPT-5.4-mini: OK')
-r2 = requests.post('https://api.deepseek.com/v1/chat/completions',
-  headers={'Authorization': f'Bearer {os.environ[\"DEEPSEEK_API_KEY\"]}'},
-  json={'model':'deepseek-chat','messages':[{'role':'user','content':'ping'}],'max_tokens':5}, timeout=30)
-print('DeepSeek: OK' if r2.ok else f'DeepSeek: FAIL {r2.status_code}')
-"
+bash /home/otsadmin/virtual/gate_v2/session_start_preflight.sh
 ```
 
-If pre-flight fails: **STOP. Do not proceed to G0. Email jurand@otsbroker.com explaining what failed.**
+If preflight fails: STOP. Do not proceed to G0. Email jurand@otsbroker.com.
+
+---
+
+## PROJECT MEMORY (loaded before every gate)
+
+Full project memory is loaded once at session start:
+- /home/otsadmin/.claude/projects/-home-otsadmin/memory/MEMORY.md — full text
+- /home/otsadmin/CLAUDE.md — full text
+- Last 5 receipts from /home/otsadmin/virtual/supervisors/receipts/ — full content
+
+All gates receive this context. No gate runs blind.
+
+```python
+from gate_v2.run_gate import start_session
+result = start_session()
+SESSION_ID = result["session_id"]
+CONTEXT = result["context"]
+```
+
+---
+
+## PROMPT GATE (runs on every user prompt)
+
+Every prompt is classified before any work begins:
+
+```python
+from gate_v2.run_gate import process_prompt
+result = process_prompt(prompt=USER_PROMPT, session_id=SESSION_ID, changed_files=[])
+# If result["overall_decision"] == "BLOCKED": stop immediately
+# If result["route"] == "READ_ONLY": answer directly, no gates
+# If result["route"] == "INCREMENTAL_GATE": G2+G4 only
+# If result["route"] == "FULL_GATE": full G0→G6 sequence
+```
 
 ---
 
 ## G0 — SCOPE_LOCK
 
-**Purpose:** GPT-5.4 proposes exactly one user-visible change. DeepSeek challenges it. Scope is frozen.
+Purpose: One user-visible change defined. DeepSeek challenges it. GPT-4o-mini gates.
 
-**Gated by:** DeepSeek Reasoner (GPT-5.4-mini calls the final binary gate)
+Virtual JP reviews after DeepSeek challenge. JP block = session terminates.
 
-**Evidence required for YES:**
-- One-sentence scope: what changes in the browser, which page, which user role benefits
-- File list: exact files to change (max 5; if more, split sessions)
-- Acceptance selector: exact text or element that will be present/changed after deploy
-- Rollback plan: exact commands to undo
-- DeepSeek has raised ≥1 concrete challenge and GPT-5.4 has answered it
-- DeepSeek confirms the scope is specific enough to falsify after deployment
+Evidence required for YES:
+- One-sentence scope: what changes in the browser, which page, which user role
+- Exact files to change (max 5)
+- Acceptance selector: exact text/element that will be present after deploy
+- Rollback command
+- DeepSeek has raised one concrete challenge and GPT-5.4 answered it
+- Virtual JP: block=false
 
-**Gate question:** "Is there exactly one user-visible change defined, with exact files, exact acceptance evidence, exact rollback, and has DeepSeek confirmed it is falsifiable?"
-
-**On NO:** Session terminates. BLOCKED receipt written. Human emailed: "BLOCKED at G0: Scope not locked — [DeepSeek's specific objection]." No code written.
-
-**GPT-5.4 call pattern:**
-```python
-import openai, os, json
-client = openai.OpenAI(api_key=os.environ['OPENAI_API_KEY'])
-r = client.chat.completions.create(
-    model="gpt-5.4",
-    messages=[{"role":"system","content":"You are the product designer for Hub. Propose one user-visible inbox improvement that can be built and deployed in this session. Be specific: which file changes, what element appears in the browser, which user role benefits, what the rollback command is."},
-              {"role":"user","content":"Session date: 2026-04-24. Last session: [FILL FROM PRE-FLIGHT]. Design the next single deployable improvement."}],
-    max_completion_tokens=1000
-)
-scope_proposal = r.choices[0].message.content
-```
-
-**DeepSeek challenge call pattern:**
-```python
-import requests, os
-resp = requests.post(
-    "https://api.deepseek.com/v1/chat/completions",
-    headers={"Authorization": f"Bearer {os.environ['DEEPSEEK_API_KEY']}"},
-    json={"model":"deepseek-reasoner",
-          "messages":[{"role":"system","content":"You challenge AI development proposals. Find the weakest assumption. Confirm or reject whether the scope is specific enough to verify after deployment."},
-                      {"role":"user","content":f"Challenge this proposal:\n{scope_proposal}"}],
-          "max_tokens":800},
-    timeout=600
-)
-challenge = resp.json()["choices"][0]["message"]["content"]
-```
-
-**GPT-5.4-mini binary gate:**
-```python
-gate_question = f"""Proposal:\n{scope_proposal}\n\nDeepSeek Challenge Response:\n{challenge}\n\n
-Does the proposal define exactly one user-visible change, with exact files, exact browser acceptance evidence, exact rollback, and has DeepSeek confirmed it is specific enough to falsify? Answer YES or NO only."""
-
-r = client.chat.completions.create(
-    model="gpt-5.4-mini",
-    messages=[{"role":"user","content":gate_question}],
-    response_format={"type":"json_schema","json_schema":{"name":"gate","strict":True,"schema":{"type":"object","properties":{"decision":{"type":"string","enum":["YES","NO"]}},"required":["decision"],"additionalProperties":False}}},
-    max_completion_tokens=10
-)
-result = json.loads(r.choices[0].message.content)
-# If NO → stop immediately
-```
+On NO or JP block: BLOCKED receipt. Email jurand@otsbroker.com. No code written.
 
 ---
 
-## G1 — PRE_STATE
+## G1 — DESIGN_ALIGNMENT
 
-**Purpose:** Capture current browser-visible state of the target page as baseline evidence.
+Purpose: Does this scope align with project goals and architecture rules?
 
-**Gated by:** Mechanical (curl + content hash) — no AI judgment, just capture
+Virtual JP reviews scope against full project memory.
 
-**Evidence required for YES:**
-- HTTP GET to the exact target URL (hub.otsbroker.com/[route]) returns 2xx
-- Response body saved to `/tmp/session_[ID]/g1_baseline.html`
-- SHA256 hash of body recorded
-- Timestamp recorded
-- If site unreachable: G1 = NO (infrastructure problem, not code problem)
+Evidence required for YES:
+- Scope does not contradict any rule in CLAUDE.md
+- Scope is not redundant with completed work (per recent receipts)
+- Scope fits the 4-week inbox focus
+- No architecture rule violation (PostgreSQL, no dark theme, OCR files locked, etc.)
 
-```bash
-SESSION_ID=$(date +%Y%m%d_%H%M%S)
-mkdir -p /tmp/session_${SESSION_ID}
-TARGET_URL="https://hub.otsbroker.com/[route-from-G0]"
-curl -sf -o /tmp/session_${SESSION_ID}/g1_baseline.html "${TARGET_URL}" && \
-  sha256sum /tmp/session_${SESSION_ID}/g1_baseline.html > /tmp/session_${SESSION_ID}/g1_hash.txt && \
-  echo "G1: YES — baseline captured at $(date)" || echo "G1: NO — site unreachable"
-```
-
-**Gate question:** "Has the current browser-visible state of the target page been captured with timestamp, content hash, and the page responds 2xx?"
-
-**On NO:** Session terminates. BLOCKED receipt. Human emailed. This is an infrastructure problem — do not code until resolved.
+On NO: Session terminates. BLOCKED receipt.
 
 ---
 
-## G2 — PLAN_APPROVE
+## G2 — RISK_ANALYSIS
 
-**Purpose:** Claude writes a file-by-file implementation plan. DeepSeek reviews it.
+Purpose: What else breaks if we make this change?
 
-**Gated by:** DeepSeek Reasoner (GPT-5.4-mini calls binary gate)
+Virtual Michal reviews risk analysis for thoroughness.
 
-**Evidence required for YES:**
-- File-by-file list: filename → what changes → why
-- Every service requiring restart is named
-- Rollback commands are exact (not "revert the changes" — actual commands)
-- DeepSeek confirms: plan produces G0 outcome, touches only scoped files, rollback is credible
+Evidence required for YES:
+- Machine grep: which other files import the files being changed
+- Affected services identified
+- Migration requirement stated (yes/no)
+- Service restart list
+- Rollback complexity rated
+- Virtual Michal: block=false (risk analysis is thorough enough)
 
-**Gate question:** "Does the file-by-file plan, as reviewed by DeepSeek, fully and exclusively produce the G0 scoped outcome with a credible rollback?"
-
-**On NO:** Claude revises plan once. DeepSeek reviews again. If second NO: session terminates. BLOCKED receipt. Human emailed.
-
----
-
-## G3 — CODE_REVIEW
-
-**Purpose:** Claude writes the code. DeepSeek reviews the actual git diff.
-
-**Gated by:** DeepSeek Reasoner (GPT-5.4-mini calls binary gate)
-
-**Evidence required for YES:**
-- Complete `git diff` (actual diff, not summary)
-- DeepSeek confirms: diff matches G2 plan, no out-of-scope changes, no hardcoded secrets, no destructive DB operations without transactions
-- DeepSeek confirms: implementation is complete, not partial
-
-**Gate question:** "Does the actual code diff match the approved plan with no out-of-scope changes and no security violations?"
-
-**On NO:** Claude revises once. DeepSeek reviews new diff. If second NO: session terminates. `git reset --hard`. BLOCKED receipt. Human emailed. **No deployment occurs.**
+On NO: Implement risk mitigations first. Do not proceed to G3 until G2 is YES.
 
 ---
 
-## G4 — DEPLOY_VERIFY
+## G3 — IMPLEMENTATION
 
-**Purpose:** Claude deploys. GPT-5.4-mini runs mechanical checks.
+Purpose: Claude writes the code.
 
-**Gated by:** GPT-5.4-mini (mechanical command output only)
+Scope: Only files listed in G0. No additions. No "while I'm here" changes.
 
-**Evidence required for YES (ALL must pass):**
-1. `systemctl status hub-mail-api` → `active (running)`
-2. `curl -sf https://hub.otsbroker.com/health` → 2xx response (or relevant health endpoint)
-3. `journalctl -u hub-mail-api -n 30 --no-pager` → no Python traceback or unhandled exception
-4. If database touched: `psql -U postgres hub -c "SELECT 1"` → success
+If a file not in G0 scope needs to be touched: STOP. Declare the addition. State acceptance criteria. Wait for confirmation.
 
-```bash
-# Deploy commands (from G2 plan):
-cd /home/otsadmin/deployed/hub_mail_rebuild/frontend && npm run build
-sudo systemctl restart hub-mail-api
-
-# G4 checks:
-systemctl is-active hub-mail-api && echo "SERVICE: PASS" || echo "SERVICE: FAIL"
-curl -sf https://hub.otsbroker.com/health && echo "HEALTH: PASS" || echo "HEALTH: FAIL"
-journalctl -u hub-mail-api -n 30 --no-pager | grep -i "traceback\|error\|exception" && echo "LOGS: FAIL" || echo "LOGS: PASS"
-```
-
-**Gate question:** "Are all affected services running, all affected endpoints returning 2xx, and logs free of exceptions?"
-
-**On NO:** Execute rollback from G2. Re-run G4 checks against rolled-back state. BLOCKED receipt. Human emailed: "BLOCKED at G4: Deploy failed — [which check failed]. Rollback executed."
+After implementation: run run_post_implementation_gates().
 
 ---
 
-## G5 — DIFF_CONFIRM (THE CRITICAL GATE)
+## G4 — CODE_QUALITY
 
-**Purpose:** Verify hub.otsbroker.com now shows the change. This is the gate whose absence caused the 6-week failure.
+Purpose: Is the implementation best-in-class, tested, and secure?
 
-**Gated by:** Mechanical comparison + GPT-5.4-mini judgment on content diff
+Virtual Michal reviews every changed file.
 
-**Evidence required for YES:**
-- New HTTP GET to same URL as G1 → response saved to `/tmp/session_[ID]/g5_post.html`
-- Content diff between G1 baseline and G5 post-deploy
-- The diff must contain the exact acceptance selector/text defined in G0
-- If no diff exists: NO (phantom deploy — code ran, nothing changed)
-- If diff exists but doesn't match G0 acceptance evidence: NO (wrong thing changed)
+Michal checks against:
+1. PEP8, type hints on new functions, no bare except, no print() in production, no mutable defaults
+2. Consistency with existing patterns in the same directory (reads 2-3 similar files)
+3. OWASP top 10: parameterised SQL, sanitised inputs, no secrets in code, no eval/exec
+4. Test coverage: every new function must have at least one test
+5. Acceptance criteria from G0
 
-```bash
-curl -sf -o /tmp/session_${SESSION_ID}/g5_post.html "${TARGET_URL}"
-diff /tmp/session_${SESSION_ID}/g1_baseline.html /tmp/session_${SESSION_ID}/g5_post.html > /tmp/session_${SESSION_ID}/g5_diff.txt
+Evidence required for YES:
+- python3 -m py_compile passes for all changed .py files
+- Virtual Michal: block=false
+- GPT-4o-mini binary gate: YES
 
-# Gate: does the diff contain the acceptance selector from G0?
-ACCEPTANCE_SELECTOR="[FILL FROM G0]"
-grep -q "${ACCEPTANCE_SELECTOR}" /tmp/session_${SESSION_ID}/g5_post.html && echo "G5: YES" || echo "G5: NO — acceptance selector not found in live page"
-```
+On NO: Fix Michal's specific objections. Re-run G4. Do not deploy until YES.
 
-**Gate question:** "Is the exact acceptance selector/text from G0 present in the live hub.otsbroker.com page, verified by content comparison with the G1 baseline?"
+---
 
-**On NO:** This is a critical failure. Code deployed, services run, nothing visible changed. Execute rollback. BLOCKED receipt with label "PHANTOM DEPLOY". Human emailed with HIGH PRIORITY flag. This failure pattern must be investigated before next session.
+## G5 — DEPLOY_VERIFY
+
+Purpose: Is the change visible on hub.otsbroker.com?
+
+Evidence required for YES:
+1. Services running: systemctl is-active hub-mail-api → active
+2. No errors in logs: journalctl -u hub-mail-api -n 30 | grep -i "traceback\|error" → empty
+3. Baseline diff: curl of target URL before and after deploy, diff contains acceptance selector from G0
+
+On NO: Rollback. BLOCKED receipt. Email jurand@otsbroker.com.
 
 ---
 
 ## G6 — SESSION_SEAL
 
-**Purpose:** Commit, seal, and close the session with full evidence.
+Purpose: Commit, seal, email.
 
-**Gated by:** GPT-5.4-mini
+Virtual JP reviews: was the right thing built? Does outcome match project goals?
+Virtual Michal reviews: is the receipt complete, honest, and standardised?
 
-**Evidence required for YES:**
-- Git commit exists with SHA recorded (`git rev-parse HEAD`)
-- Commit message includes session ID
-- G5 returned YES (checked in gate input)
-- Session receipt written to `/home/otsadmin/virtual/supervisors/receipts/[SESSION_ID]_[task].json`
-- Human notification email sent with: session ID, commit hash, target URL, G5 screenshot/diff path
+Evidence required for YES:
+- Git commit hash recorded
+- Receipt written in standard v2 JSON format via write_receipt()
+- Virtual JP: block=false
+- GPT-4o-mini binary gate: YES
+- Email sent to jurand@otsbroker.com
 
-```bash
-cd /home/otsadmin
-git add [scoped files from G2 only]
-git commit -m "session: ${SESSION_ID} — [G0 scope in one line]"
-COMMIT_HASH=$(git rev-parse HEAD)
-echo "COMMIT: ${COMMIT_HASH}"
+```python
+from gate_v2.run_gate import seal_session
+result = seal_session(
+    session_id=SESSION_ID,
+    session_summary="one paragraph summary",
+    commit_hash=COMMIT_HASH,
+    scope=G0_SCOPE,
+    artifacts=ARTIFACT_PATHS
+)
 ```
-
-**Gate question:** "Does a git commit hash exist for this session, did G5 pass, and has a complete session receipt been written and human notified?"
-
-**On NO:** Session cannot close as COMPLETE. BLOCKED receipt: "Session seal failed — [missing commit / missing G5 pass / incomplete receipt]." Human emailed. Session marked INCOMPLETE.
 
 ---
 
 ## BLOCKED RECEIPT FORMAT
 
-Every blocked session must write this immediately:
+Every blocked session writes:
 
 ```json
 {
-  "session_id": "[SESSION_ID]",
-  "status": "BLOCKED",
-  "blocked_at_gate": "G[N]",
-  "gate_question": "[exact question that returned NO]",
-  "reason": "[specific reason for NO]",
-  "changes_reverted": true,
-  "rollback_command": "[exact command run]",
+  "schema_version": "2.0",
+  "session_id": "...",
+  "gate": "G[N]",
+  "decision": "BLOCKED",
+  "decided_by": "...",
+  "timestamp": "...",
+  "scope": "...",
+  "artifacts": [],
+  "gate_results": {"G0": "?", "G1": "?", ...},
+  "risk_report": {"affected_files": [], "affected_services": [], "migration_required": false},
+  "test_results": {"lint": "SKIP", "unit_tests": "SKIP", "smoke_test": "SKIP"},
+  "virtual_jp": {"block": false, "reason": ""},
+  "virtual_michal": {"block": false, "quality_issues": []},
+  "known_limits": [],
   "human_emailed": true,
-  "email_sent_to": "jurand@otsbroker.com",
-  "timestamp": "[ISO timestamp]"
+  "commit_hash": ""
 }
 ```
 
-Path: `/home/otsadmin/virtual/supervisors/receipts/[SESSION_ID]_BLOCKED.json`
-
-Email subject: `HUB PROTOCOL BLOCKED at G[N]: [one-line reason]`
+Path: /home/otsadmin/virtual/supervisors/receipts/{SESSION_ID}_BLOCKED.json
 
 ---
 
-## DEPLOYED RECEIPT FORMAT
+## RECEIPT STANDARDISATION
 
-Every successfully deployed session must write this:
+All receipts use schema v2.0. No exceptions.
 
-```json
-{
-  "session_id": "[SESSION_ID]",
-  "status": "DEPLOYED",
-  "g0_scope": "[one-sentence scope]",
-  "files_changed": ["file1", "file2"],
-  "commit_hash": "[SHA]",
-  "target_url": "https://hub.otsbroker.com/[route]",
-  "acceptance_selector": "[text/element verified]",
-  "g1_baseline_path": "/tmp/session_[ID]/g1_baseline.html",
-  "g5_post_path": "/tmp/session_[ID]/g5_post.html",
-  "g5_diff_path": "/tmp/session_[ID]/g5_diff.txt",
-  "gates": {
-    "G0": "YES", "G1": "YES", "G2": "YES", "G3": "YES",
-    "G4": "YES", "G5": "YES", "G6": "YES"
-  },
-  "human_emailed": true,
-  "timestamp": "[ISO timestamp]"
-}
-```
+Enforced by: /home/otsadmin/virtual/gate_v2/receipt_validator.py
+The validator runs before every receipt write. A receipt that fails validation cannot be written.
 
----
-
-## PROTOCOL INTEGRITY CHECK (runs before every session)
-
-GPT-5.4-mini runs this meta-check. All must return YES:
-
-| Check | Question | Required |
-|---|---|---|
-| IC-1 | Does every gate have a gating model different from the producing model? | YES |
-| IC-2 | Is G5 (DIFF_CONFIRM) present and un-bypassed? | YES |
-| IC-3 | Is there a mechanism to email jurand@otsbroker.com on any NO? | YES |
-| IC-4 | Is scope limited to exactly one user-visible change? | YES |
-| IC-5 | Is the target URL hub.otsbroker.com (not localhost)? | YES |
-
-If any check fails: **do not start the session.**
-
----
-
-## DESIGN RULES (inherited from product vision)
-
-- Every feature must be visible to an operator in under 10 seconds
-- Default target: main inbox workflow (for next 4 weeks)
-- Banned: hidden thread-panel-only features with no inbox visibility
-- Banned: sessions that produce code without a G5-verified deployed change
-- Banned: new `--outlook-*` CSS variables (use semantic tokens from design-tokens.css)
-- Banned: new SQLite tables/columns (use PostgreSQL)
-- OCR files protected: `/home/otsadmin/shared/document_reader.py` and `ocr_api.py` — do not touch
+No free-text receipts. No HTML receipts. No 10-character receipts.
+One format. One schema. Always.
 
 ---
 
 ## REQUIRED OUTPUT — session start confirmation
 
-After running pre-flight and before G0, output:
+After preflight and before G0:
 
 ```
-SESSION READY
+SESSION READY v2
 Session ID: [YYYYMMDD_HHMMSS]
 Project: Hub
-Pre-flight: git ✓ | GPT-5.4 ✓ | GPT-5.4-mini ✓ | DeepSeek ✓
-Yesterday visibility: [one sentence on what was last deployed and where it's visible]
+Pre-flight: git [ok/FAIL] | GPT-4o-mini [ok/FAIL] | DeepSeek [ok/FAIL] | Gemini [ok/FAIL]
+Project memory: loaded [N chars MEMORY.md, N chars CLAUDE.md, N receipts]
+Yesterday: [one sentence on what was last deployed and where visible]
 Git status: [N uncommitted files / clean]
-Protected zones: checked
-Quality bar: G5 browser-verified deployment required
+Gate sequence: FULL (new feature) or INCREMENTAL (continuation)
 ```
 
-Then G0 begins immediately. GPT-5.4 proposes. DeepSeek challenges. Gate runs.
+Then G0 begins immediately.
+
+---
+
+## ESCALATION TO 3-MODEL REVIEW
+
+3-model review (GPT-5.4 + DeepSeek + Gemini) is used ONLY when:
+- risk_class = "critical" (auth, security, data migration affecting all users)
+- A gate returns NO twice consecutively
+- Virtual JP and Virtual Michal disagree on a block decision
+
+In all other cases: 1 primary + 1 challenger only.
