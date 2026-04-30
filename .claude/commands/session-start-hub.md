@@ -1,6 +1,6 @@
 # hub-binary-gate-protocol-v2.md
 # System: hub.otsbroker.com | Enforced AI Development Protocol
-# Built: 2026-04-29 | Replaces: session-start-hub.md (v1)
+# Built: 2026-04-29 | Last updated: 2026-04-30 (8 gate upgrades — see changelog at bottom)
 # Authority: This file governs ALL AI development sessions on Hub. It cannot be bypassed.
 
 ---
@@ -27,14 +27,16 @@ Incremental path (minor changes only): G2 → G4 → G5 → G6
 
 | Role | Model | Allowed | Forbidden |
 |---|---|---|---|
-| Designer | GPT-5.4 | Propose scope | Gate own proposals, write code |
+| Designer | GPT-5.5 → GPT-5.4 fallback | Propose scope | Gate own proposals, write code |
 | Challenger | DeepSeek Reasoner | Challenge proposals, adversarial review | Propose features |
 | Implementer | Claude Sonnet | Write code, deploy, provide evidence | Approve, validate, close gates |
 | Gate Executor | GPT-4o-mini | Run all binary YES/NO gates | Propose, implement |
 | Virtual JP | Gemini 2.5 Flash | Block if work contradicts project goals | Implement, propose |
-| Virtual Michal | DeepSeek Reasoner | Block if quality, tests, or security fail | Propose, gate direction |
+| Virtual Michal | DeepSeek Reasoner (full) / deepseek-chat (incremental) | Block if quality, tests, or security fail | Propose, gate direction |
 
 Hard rule: The model that produces an artifact cannot be the model that gates it.
+
+Model cascade rule (designer/judge): GPT-5.5 is primary. If unavailable, fall back to GPT-5.4. If both unavailable, session hard stops. Never silently fall through to any other model.
 
 Virtual JP gates: G0, G1, G6 (direction and outcome)
 Virtual Michal gates: G2, G3, G4, G5 (implementation quality at every step)
@@ -145,6 +147,8 @@ Scope: Only files listed in G0. No additions. No "while I'm here" changes.
 
 If a file not in G0 scope needs to be touched: STOP. Declare the addition. State acceptance criteria. Wait for confirmation.
 
+File locking: Before any file is written, gate_v2/file_lock.py acquires an atomic mkdir lock on every file in scope. If any file is already locked by another session, G3 returns LOCK_CONFLICT (BLOCKED). Locks auto-expire at 30 minutes. Use force_unlock() for debug only.
+
 After implementation: run run_post_implementation_gates().
 
 ---
@@ -155,12 +159,16 @@ Purpose: Is the implementation best-in-class, tested, and secure?
 
 Virtual Michal reviews every changed file.
 
-Michal checks against:
-1. PEP8, type hints on new functions, no bare except, no print() in production, no mutable defaults
-2. Consistency with existing patterns in the same directory (reads 2-3 similar files)
-3. OWASP top 10: parameterised SQL, sanitised inputs, no secrets in code, no eval/exec
-4. Test coverage: every new function must have at least one test
-5. Acceptance criteria from G0
+Michal runs tiered 30/30 gate:
+- NEW_FEATURE (new endpoint / screen / schema change): 30/30 — 10 FE + 10 BE + 10 Risk checks
+- BUG_FIX (<20 lines, no schema change): 10-check subset (tests, validation, observability, secrets, rollback)
+- SMOKE (typo / config tweak): smoke test only
+
+Michal must declare tier before reviewing. Output is a JSON gate table (CHECK_ID | PASS/FAIL | ARTEFACT_PATH | NOTES). Anything below required pass count = hard NO, redo required. Max 3 redo cycles then escalate to JP.
+
+Michal model: deepseek-reasoner for full gates (600s), deepseek-chat for incremental (120s, 2000 chars/file).
+
+Sycophancy block — Michal is forbidden from: "should work", "looks good", "appears to", "mostly compliant", "acceptable for now", "fix later".
 
 Evidence required for YES:
 - python3 -m py_compile passes for all changed .py files
@@ -186,7 +194,7 @@ On NO: Rollback. BLOCKED receipt. Email jurand@otsbroker.com.
 
 ## G6 — SESSION_SEAL
 
-Purpose: Commit, seal, email.
+Purpose: Commit, seal, email, update memory.
 
 Virtual JP reviews: was the right thing built? Does outcome match project goals?
 Virtual Michal reviews: is the receipt complete, honest, and standardised?
@@ -197,6 +205,8 @@ Evidence required for YES:
 - Virtual JP: block=false
 - GPT-4o-mini binary gate: YES
 - Email sent to jurand@otsbroker.com
+- Memory update: gpt-4o-mini extracts new decisions/facts from session, appends to MEMORY.md under dated heading (non-blocking — failure logs to stderr, does not prevent seal)
+- File locks released for all files in scope
 
 ```python
 from gate_v2.run_gate import seal_session
@@ -273,9 +283,24 @@ Then G0 begins immediately.
 
 ## ESCALATION TO 3-MODEL REVIEW
 
-3-model review (GPT-5.4 + DeepSeek + Gemini) is used ONLY when:
+3-model review (GPT-5.5 + DeepSeek + Gemini) is used ONLY when:
 - risk_class = "critical" (auth, security, data migration affecting all users)
 - A gate returns NO twice consecutively
 - Virtual JP and Virtual Michal disagree on a block decision
 
 In all other cases: 1 primary + 1 challenger only.
+
+---
+
+## CHANGELOG
+
+| Date | Change |
+|---|---|
+| 2026-04-30 | GPT-5.5 primary, GPT-5.4 fallback, hard stop if both unavailable |
+| 2026-04-30 | Michal: 30/30 gate (10 FE + 10 BE + 10 Risk), JSON table output, tiered, sycophancy block |
+| 2026-04-30 | Michal: deepseek-chat 120s for incremental, reasoner 600s for full |
+| 2026-04-30 | G3 file locking: mkdir-atomic, 30min expire, GateLockConflict |
+| 2026-04-30 | G6 memory update: gpt-4o-mini extracts decisions → MEMORY.md (non-blocking) |
+| 2026-04-30 | Information isolation unit test: 5/5 pass, strip confirmed |
+| 2026-04-30 | 7 legacy receipt files marked # gate-v2-exempt |
+| 2026-04-29 | Protocol v2 built — DEPLOYED/BLOCKED binary outcomes, G0→G6 sequence |
